@@ -7,12 +7,11 @@ import os
 import sqlite3
 from datetime import date, datetime, timedelta
 try:
+    try:
     from dotenv import load_dotenv
     load_dotenv()
-except ImportError:
+except Exception:
     pass
-
-load_dotenv()
 
 # Configuração da página (otimizada para celular e notebook)
 st.set_page_config(
