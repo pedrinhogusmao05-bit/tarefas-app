@@ -6,8 +6,11 @@ Interface visual responsiva para celular e notebook.
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
-import streamlit as st
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 load_dotenv()
 
