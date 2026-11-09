@@ -6,45 +6,16 @@ Interface visual responsiva para celular e notebook.
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
-try:
-    try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
+import streamlit as st
 
-# Configuração da página (otimizada para celular e notebook)
+DB_PATH = "tasks.db"
+
 st.set_page_config(
     page_title="Minha Rotina & Tarefas",
     page_icon="✨",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
-
-# Estilização visual limpa e moderna
-st.markdown(
-    """
-    <style>
-    .main { background-color: #fcfcfd; }
-    .stButton>button {
-        border-radius: 10px;
-        font-weight: 600;
-        transition: all 0.2s;
-    }
-    .metric-card {
-        background: white;
-        padding: 14px;
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        text-align: center;
-        border: 1px solid #edf2f7;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-DB_PATH = "tasks.db"
 
 
 def init_db():
@@ -127,9 +98,12 @@ def get_stats():
 
 
 def call_gemini_reorganizer(tasks):
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key and hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+
     if not api_key:
-        return "⚠️ Adicione sua chave GEMINI_API_KEY no arquivo .env para ativar a IA!"
+        return "⚠️ Chave GEMINI_API_KEY não encontrada nos Segredos do Streamlit!"
 
     hoje = date.today().strftime("%d/%m/%Y")
     lista_txt = "\n".join([
@@ -161,7 +135,7 @@ Mantenha o tom encorajador, use tópicos e emojis.
             except Exception:
                 continue
     except Exception as e:
-        return f"Não foi possível consultar o Gemini agora ({e}). Foque em concluir suas tarefas de alta prioridade primeiro!"
+        return f"Não foi possível consultar o Gemini agora ({e})."
 
 
 # ==========================================
@@ -171,7 +145,6 @@ Mantenha o tom encorajador, use tópicos e emojis.
 st.title("✨ Minha Rotina & Tarefas")
 st.caption(f"Hoje é {date.today().strftime('%A, %d de %B de %Y')}")
 
-# Métricas rápidas no topo
 pendentes, para_hoje, feitas_hoje = get_stats()
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -183,7 +156,6 @@ with col3:
 
 st.divider()
 
-# Botão de Destaque: Reorganizar com IA
 if st.button("🧠 Reorganizar Meu Dia com IA", type="primary", use_container_width=True):
     tarefas_ativas = get_tasks("todas")
     if not tarefas_ativas:
@@ -196,7 +168,6 @@ if st.button("🧠 Reorganizar Meu Dia com IA", type="primary", use_container_wi
 
 st.write("")
 
-# Formulário para adicionar nova tarefa
 with st.expander("➕ Adicionar Nova Tarefa", expanded=False):
     with st.form("form_nova_tarefa", clear_on_submit=True):
         titulo = st.text_input("O que você precisa fazer?", placeholder="Ex: Enviar relatório financeiro")
@@ -214,7 +185,6 @@ with st.expander("➕ Adicionar Nova Tarefa", expanded=False):
             st.success("Tarefa adicionada com sucesso!")
             st.rerun()
 
-# Abas de visualização
 tab_hoje, tab_trabalho, tab_pessoal, tab_todas, tab_feitas = st.tabs(
     ["📅 Hoje", "💼 Trabalho", "🏠 Pessoal", "📋 Todas", "✅ Histórico"]
 )
