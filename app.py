@@ -147,4 +147,4 @@ def get_tasks(filter_mode="hoje"):
     elif filter_mode == "concluidas":
         c.execute("SELECT * FROM tasks WHERE status = 'concluida' ORDER BY completed_at DESC LIMIT 50")
 
-    tasks = [dict(row) for row in c
+  tasks = [dict(row) for row in c.fetchall()]
