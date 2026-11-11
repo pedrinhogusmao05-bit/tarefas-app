@@ -1,6 +1,6 @@
 """
 APLICATIVO DE TAREFAS E REORGANIZAÇÃO COM IA (STREAMLIT)
-Versão 3.0 - Entrada por voz/áudio com Gemini, Modo Foco Pomodoro e Exportação de Relatórios.
+Versão 4.0 - Com Edição e Exclusão de Tarefas, Microfone, Pomodoro e WhatsApp.
 """
 
 import os
@@ -32,6 +32,13 @@ st.markdown(
         padding: 16px;
         border-radius: 12px;
         text-align: center;
+        margin-bottom: 12px;
+    }
+    .edit-box {
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        padding: 14px;
+        border-radius: 10px;
         margin-bottom: 12px;
     }
     </style>
@@ -78,6 +85,23 @@ def complete_task(task_id):
     conn.execute(
         "UPDATE tasks SET status = 'concluida', completed_at = ? WHERE id = ?",
         (datetime.now().isoformat(), task_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_task(task_id):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_task(task_id, title, category, priority, due_date):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        "UPDATE tasks SET title = ?, category = ?, priority = ?, due_date = ? WHERE id = ?",
+        (title.strip(), category.lower(), priority.lower(), str(due_date), task_id),
     )
     conn.commit()
     conn.close()
@@ -333,25 +357,70 @@ for aba, filtro in abas_map.items():
             st.info("Nenhuma tarefa nesta lista.")
         else:
             for t in lista:
-                col_check, col_adiar, col_info = st.columns([0.12, 0.15, 0.73])
-                with col_check:
-                    if st.button("✔", key=f"done_{filtro}_{t['id']}", help="Marcar como concluída"):
-                        complete_task(t["id"])
-                        st.toast(f"Parabéns! '{t['title']}' concluída!")
-                        st.rerun()
+                # Se esta tarefa estiver em modo de edição
+                if st.session_state.get("editing_id") == t["id"]:
+                    st.markdown(f"**✏️ Editando Tarefa #{t['id']}**")
+                    with st.container():
+                        e_tit = st.text_input("Título", value=t["title"], key=f"edit_tit_{t['id']}")
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            cat_idx = ["trabalho", "pessoal", "estudos"].index(t["category"]) if t["category"] in ["trabalho", "pessoal", "estudos"] else 0
+                            e_cat = st.selectbox("Categoria", ["Trabalho", "Pessoal", "Estudos"], index=cat_idx, key=f"edit_cat_{t['id']}")
+                        with c2:
+                            prio_idx = ["alta", "media", "baixa"].index(t["priority"]) if t["priority"] in ["alta", "media", "baixa"] else 1
+                            e_prio = st.selectbox("Prioridade", ["Alta", "Media", "Baixa"], index=prio_idx, key=f"edit_prio_{t['id']}")
+                        with c3:
+                            try:
+                                d_val = datetime.strptime(t["due_date"], "%Y-%m-%d").date()
+                            except Exception:
+                                d_val = date.today()
+                            e_prazo = st.date_input("Prazo", value=d_val, key=f"edit_prazo_{t['id']}")
 
-                with col_adiar:
-                    if st.button("⏩", key=f"postpone_{filtro}_{t['id']}", help="Adiar para amanhã"):
-                        postpone_task(t["id"])
-                        st.toast(f"'{t['title']}' adiada para amanhã.")
-                        st.rerun()
+                        col_save, col_canc = st.columns(2)
+                        with col_save:
+                            if st.button("Salvar Alterações", key=f"save_btn_{t['id']}", use_container_width=True):
+                                update_task(t["id"], e_tit, e_cat, e_prio, e_prazo)
+                                st.session_state["editing_id"] = None
+                                st.toast("Tarefa atualizada!")
+                                st.rerun()
+                        with col_canc:
+                            if st.button("Cancelar", key=f"canc_btn_{t['id']}", use_container_width=True):
+                                st.session_state["editing_id"] = None
+                                st.rerun()
+                    st.divider()
 
-                with col_info:
-                    prio_badge = "🔴 Alta" if t["priority"] == "alta" else "🟡 Média" if t["priority"] == "media" else "🟢 Baixa"
-                    cat_badge = "💼 Trabalho" if t["category"] == "trabalho" else "🏠 Pessoal" if t["category"] == "pessoal" else "📚 Estudos"
-                    st.markdown(f"**{t['title']}**")
-                    st.caption(f"{cat_badge} | {prio_badge} | 🗓 Prazo: {t['due_date']}")
-                st.write("")
+                else:
+                    col_check, col_adiar, col_edit, col_del, col_info = st.columns([0.1, 0.1, 0.1, 0.1, 0.6])
+                    
+                    with col_check:
+                        if st.button("✔", key=f"done_{filtro}_{t['id']}", help="Marcar como concluída"):
+                            complete_task(t["id"])
+                            st.toast(f"Parabéns! '{t['title']}' concluída!")
+                            st.rerun()
+
+                    with col_adiar:
+                        if st.button("⏩", key=f"postpone_{filtro}_{t['id']}", help="Adiar para amanhã (+1 dia)"):
+                            postpone_task(t["id"])
+                            st.toast(f"'{t['title']}' adiada para amanhã.")
+                            st.rerun()
+
+                    with col_edit:
+                        if st.button("✏️", key=f"edit_btn_{filtro}_{t['id']}", help="Editar tarefa"):
+                            st.session_state["editing_id"] = t["id"]
+                            st.rerun()
+
+                    with col_del:
+                        if st.button("🗑️", key=f"del_{filtro}_{t['id']}", help="Excluir tarefa"):
+                            delete_task(t["id"])
+                            st.toast("Tarefa excluída!")
+                            st.rerun()
+
+                    with col_info:
+                        prio_badge = "🔴 Alta" if t["priority"] == "alta" else "🟡 Média" if t["priority"] == "media" else "🟢 Baixa"
+                        cat_badge = "💼 Trabalho" if t["category"] == "trabalho" else "🏠 Pessoal" if t["category"] == "pessoal" else "📚 Estudos"
+                        st.markdown(f"**{t['title']}**")
+                        st.caption(f"{cat_badge} | {prio_badge} | 🗓 Prazo: {t['due_date']}")
+                    st.write("")
 
 # ⏱️ ABA MODO FOCO / POMODORO
 with tab_foco:
@@ -398,7 +467,13 @@ with tab_feitas:
         )
         st.write("")
         for t in concluidas:
-            st.markdown(f"~~**{t['title']}**~~")
-            st.caption(f"[{t['category'].capitalize()}] Concluída em: {t.get('completed_at', '')[:10]}")
+            col_del_c, col_txt_c = st.columns([0.1, 0.9])
+            with col_del_c:
+                if st.button("🗑️", key=f"del_done_{t['id']}", help="Excluir do histórico"):
+                    delete_task(t["id"])
+                    st.rerun()
+            with col_txt_c:
+                st.markdown(f"~~**{t['title']}**~~")
+                st.caption(f"[{t['category'].capitalize()}] Concluída em: {t.get('completed_at', '')[:10]}")
     else:
         st.info("Nenhuma tarefa concluída ainda.")
